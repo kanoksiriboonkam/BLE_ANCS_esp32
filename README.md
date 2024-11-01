@@ -1,61 +1,179 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C6 | ESP32-H2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | -------- |
+# Example นี้มีชื่อว่า BLE_ANCS
+ซึ่ง Exampleนี้ เป็นการทำให้ esp32 ปล่อยสัญญานออกมาแบบBlutooth เพื่อดักจับสัญญาณเช่น การโทรเบอร์โทรศัพท์
+# ขั้นตอนที่1-3 ดังรูปต่อไปนี้
+# ![รูปภาพ (9)-1 2](https://github.com/user-attachments/assets/fa4bdca4-674b-4835-82b4-a8112afd5758)
+## ขั้นตอนที่4 ทำการbuild 
+# ขั้นตอนที่5 เชื่อมต่อblutooth
+-โดยนำโทรศัพท์มือถือเชื่อมต่อblutooth จะได้ดังรูป
+#  ![IMG_7248](https://github.com/user-attachments/assets/9ef8cbe3-3ee9-4afe-b7e4-2b6d8f021be5)
+# ขั้นตอนที่6 ทดลองการดักจับสัญญาณ
+#  <img width="795" alt="ภาพถ่ายหน้าจอ 2567-11-01 เวลา 22 44 54" src="https://github.com/user-attachments/assets/81ff8a59-7dd0-42ab-a07b-ae1fad2a9ab6">
 
-# ESP-IDF BLE ANCS Example
-
-The purpose of the Apple Notification Center Service (ANCS) is to give Bluetooth accessories (that connect to iOS devices through a Bluetooth low-energy link) a simple and convenient way to access many kinds of notifications that are generated on iOS devices.
-
-## How to Use Example
-
-Before project configuration and build, be sure to set the correct chip target using:
-
-```bash
-idf.py set-target <chip_name>
+## ปรับปรุงแก้ไข้ในการใช้งานได้ดังนี้
+หากมีการใช้ malloc ในการจัดการหน่วยความจำแบบไดนามิก ควรคืนค่าหน่วยความจำโดยใช้ free ทุกครั้งหลังใช้งานเสร็จ
+#  <img width="798" alt="ภาพถ่ายหน้าจอ 2567-11-01 เวลา 23 06 24" src="https://github.com/user-attachments/assets/9cb8dea2-9a6a-496f-8ddd-0f2b663a5858">
 ```
+#include <stdlib.h>
+#include <string.h>
+#include <inttypes.h>
+#include "esp_log.h"
+#include "ble_ancs.h"
 
-The Apple Notification Center Service is a primary service whose service UUID is:
+#define BLE_ANCS_TAG  "BLE_ANCS"
 
-`7905F431-B5CE-4E99-A40F-4B1E122D00D0`
+char *EventID_to_String(uint8_t EventID) {
+    char *str = malloc(20);
+    if (!str) return NULL;
+    switch (EventID) {
+        case EventIDNotificationAdded:
+            strcpy(str, "New message");
+            break;
+        case EventIDNotificationModified:
+            strcpy(str, "Modified message");
+            break;
+        case EventIDNotificationRemoved:
+            strcpy(str, "Removed message");
+            break;
+        default:
+            strcpy(str, "unknown EventID");
+            break;
+    }
+    return str;
+}
 
-Only one instance of the ANCS may be present on an NP. Due to the nature of iOS, the ANCS is not guaranteed to always be present. As a result, the NC should look for and subscribe to the Service Changed characteristic of the GATT service in order to monitor for the potential publishing and unpublishing of the ANCS at any time.
+char *CategoryID_to_String(uint8_t CategoryID) {
+    char *Cidstr = malloc(25);
+    if (!Cidstr) return NULL;
+    switch (CategoryID) {
+        case CategoryIDOther:
+            strcpy(Cidstr, "Other");
+            break;
+        case CategoryIDIncomingCall:
+            strcpy(Cidstr, "Incoming Call");
+            break;
+        case CategoryIDMissedCall:
+            strcpy(Cidstr, "Missed Call");
+            break;
+        case CategoryIDVoicemail:
+            strcpy(Cidstr, "Voicemail");
+            break;
+        case CategoryIDSocial:
+            strcpy(Cidstr, "Social");
+            break;
+        case CategoryIDSchedule:
+            strcpy(Cidstr, "Schedule");
+            break;
+        case CategoryIDEmail:
+            strcpy(Cidstr, "Email");
+            break;
+        case CategoryIDNews:
+            strcpy(Cidstr, "News");
+            break;
+        case CategoryIDHealthAndFitness:
+            strcpy(Cidstr, "Health & Fitness");
+            break;
+        case CategoryIDBusinessAndFinance:
+            strcpy(Cidstr, "Business & Finance");
+            break;
+        case CategoryIDLocation:
+            strcpy(Cidstr, "Location");
+            break;
+        case CategoryIDEntertainment:
+            strcpy(Cidstr, "Entertainment");
+            break;
+        default:
+            strcpy(Cidstr, "Unknown CategoryID");
+            break;
+    }
+    return Cidstr;
+}
 
-In its basic form, the ANCS exposes three characteristics:
-Notification Source: UUID `9FBF120D-6301-42D9-8C58-25E699A21DBD` (notifiable)
-Control Point: UUID `69D1D8F3-45E1-49A8-9821-9BBDFDAAD9D9` (writeable with response)
-Data Source: UUID `22EAC6E9-24D6-4BB5-BE44-B36ACE7C7BFB` (notifiable)
+char *Errcode_to_String(uint16_t status) {
+    char *Errstr = malloc(25);
+    if (!Errstr) return NULL;
+    switch (status) {
+        case Unknown_command:
+            strcpy(Errstr, "Unknown command");
+            break;
+        case Invalid_command:
+            strcpy(Errstr, "Invalid command");
+            break;
+        case Invalid_parameter:
+            strcpy(Errstr, "Invalid parameter");
+            break;
+        case Action_failed:
+            strcpy(Errstr, "Action failed");
+            break;
+        default:
+            strcpy(Errstr, "Unknown error");
+            break;
+    }
+    return Errstr;
+}
 
-All these characteristics require authorization for access.
+void esp_receive_apple_notification_source(uint8_t *message, uint16_t message_len) {
+    if (!message || message_len < 5) {
+        return;
+    }
 
-### Hardware Required
+    uint8_t EventID = message[0];
+    char *EventIDS = EventID_to_String(EventID);
+    if (!EventIDS) return;
 
-* A development board with ESP32/ESP32-C3/ESP32-H2/ESP32-C2/ESP32-S3 SoC (e.g., ESP32-DevKitC, ESP-WROVER-KIT, etc.)
-* A USB cable for power supply and programming
+    uint8_t EventFlags = message[1];
+    uint8_t CategoryID = message[2];
+    char *Cidstr = CategoryID_to_String(CategoryID);
+    if (!Cidstr) {
+        free(EventIDS);
+        return;
+    }
 
-See [Development Boards](https://www.espressif.com/en/products/devkits) for more information about it.
+    uint8_t CategoryCount = message[3];
+    uint32_t NotificationUID = message[4] | (message[5] << 8) | (message[6] << 16) | (message[7] << 24);
 
-### Build and Flash
+    ESP_LOGI(BLE_ANCS_TAG, "EventID:%s EventFlags:0x%x CategoryID:%s CategoryCount:%d NotificationUID:%" PRIu32,
+             EventIDS, EventFlags, Cidstr, CategoryCount, NotificationUID);
 
-Run `idf.py -p PORT flash monitor` to build, flash and monitor the project.
+    free(EventIDS);
+    free(Cidstr);
+}
 
-(To exit the serial monitor, type ``Ctrl-]``.)
+void esp_receive_apple_data_source(uint8_t *message, uint16_t message_len) {
+    if (!message || message_len == 0) {
+        return;
+    }
 
-See the [Getting Started Guide](https://idf.espressif.com/) for full steps to configure and use ESP-IDF to build projects.
+    uint8_t Command_id = message[0];
+    switch (Command_id) {
+        case CommandIDGetNotificationAttributes: {
+            uint32_t NotificationUID = (message[1]) | (message[2] << 8) | (message[3] << 16) | (message[4] << 24);
+            uint32_t remian_attr_len = message_len - 5;
+            uint8_t *attrs = &message[5];
+            ESP_LOGI(BLE_ANCS_TAG, "recevice Notification Attributes response Command_id %d NotificationUID %" PRIu32, Command_id, NotificationUID);
 
-## Example Output
+            while (remian_attr_len > 0) {
+                uint8_t AttributeID = attrs[0];
+                uint16_t len = attrs[1] | (attrs[2] << 8);
+                if (len > (remian_attr_len - 3)) {
+                    ESP_LOGE(BLE_ANCS_TAG, "data error");
+                    break;
+                }
+                esp_log_buffer_char("AttributeID Data", &attrs[3], len);
+                attrs += (1 + 2 + len);
+                remian_attr_len -= (1 + 2 + len);
+            }
+            break;
+        }
+        case CommandIDGetAppAttributes:
+            ESP_LOGI(BLE_ANCS_TAG, "recevice APP Attributes response");
+            break;
+        case CommandIDPerformNotificationAction:
+            ESP_LOGI(BLE_ANCS_TAG, "recevice Perform Notification Action");
+            break;
+        default:
+            ESP_LOGI(BLE_ANCS_TAG, "Unknown Command ID");
+            break;
+    }
+}
 
 ```
-I (0) cpu_start: Starting scheduler on APP CPU.
-I (558) BTDM_INIT: BT controller compile version [1342a48]
-I (568) system_api: Base MAC address is not set
-I (568) system_api: read default base MAC address from EFUSE
-I (568) phy_init: phy_version 4670,719f9f6,Feb 18 2021,17:07:07
-I (918) BLE_ANCS: app_main init bluetooth
-I (1018) BLE_ANCS: REG_EVT
-E (1028) BT_BTM: BTM_BleConfigLocalIcon
-
-I (1058) BLE_ANCS: advertising start success
-```
-
-## Troubleshooting
-
-For any technical queries, please open an [issue](https://github.com/espressif/esp-idf/issues) on GitHub. We will get back to you soon.
